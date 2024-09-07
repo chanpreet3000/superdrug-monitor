@@ -10,6 +10,10 @@ def get_current_time():
     return datetime.now(uk_tz).strftime('%d %B %Y, %I:%M:%S %p %Z')
 
 
+def get_product_name(url):
+    return ' '.join(url.split('/')[-3].split('-')).capitalize()
+
+
 async def fetch_product_data(url):
     Logger.info(f'Fetching product data {url}')
     async with async_playwright() as p:
@@ -31,7 +35,7 @@ async def fetch_product_data(url):
         Logger.info('Successfully Scraped Script Content')
 
         product_code = url.split('/')[-1]
-        product_name = ' '.join(url.split('/')[-3].split('-')).capitalize()
+        product_name = get_product_name(url)
 
         cleaned_content = script_content.replace('&q;', '"').replace('&l;', '<').replace('&g;', '>')
         data = json.loads(cleaned_content)

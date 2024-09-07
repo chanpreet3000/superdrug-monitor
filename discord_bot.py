@@ -1,8 +1,9 @@
 import discord
 from discord import app_commands
 
+from data_manager import DataManager
 from logger import Logger
-from utils import fetch_product_data, get_current_time
+from utils import fetch_product_data, get_current_time, get_product_name
 
 
 class Bot(discord.Client):
@@ -17,17 +18,87 @@ class Bot(discord.Client):
 
 
 client = Bot()
+data_manager = DataManager()
 
 
-@client.tree.command(name="watch", description="Get Notified when a product is in stock")
+@client.tree.command(name="watch", description="Get notified when a product is back in stock")
 async def watch(interaction: discord.Interaction, product_url: str):
-    await interaction.response.send_message(f"Watching product at: {product_url}")
+    Logger.info(f"Received watch request for: {product_url}")
+    await interaction.response.defer(thinking=True)
+
+    if data_manager.product_exists(product_url):
+        Logger.warn(f"Product already being watched: {product_url}")
+        embed = discord.Embed(
+            title="🔔 Already Watching",
+            description=f"Already watching [{get_product_name(product_url)}]({product_url})",
+            color=0xffcc00  # Yellow for existing watch
+        )
+        await interaction.followup.send(embed=embed)
+    else:
+        data_manager.add_product_url(product_url)
+        Logger.info(f"Started watching product: {product_url}")
+        embed = discord.Embed(
+            title="✅ Now Watching",
+            description=f"Started watching [{get_product_name(product_url)}]({product_url})",
+            color=0x00ff00
+        )
+        await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="get_watched", description="Get all watched product URLs")
+async def get_watched(interaction: discord.Interaction):
+    Logger.info("Fetching all watched products")
+    await interaction.response.defer(thinking=True)
+
+    watched_products = data_manager.get_all_product_urls()
+    Logger.debug(f"Watched products retrieved: {watched_products}")
+    if watched_products:
+        response = "\n".join([f"{i + 1}. [{get_product_name(url)}]({url})" for i, url in enumerate(watched_products)])
+        embed = discord.Embed(
+            title="📋 Watched Products",
+            description=response,
+            color=0x00ccff
+        )
+    else:
+        Logger.warn("No products are being watched")
+        embed = discord.Embed(
+            title="🚫 No Watched Products",
+            description="🚫 No products are currently being watched.",
+            color=0xff0000
+        )
+
+    await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="unwatch", description="Stop watching a product")
+async def unwatch(interaction: discord.Interaction, product_url: str):
+    Logger.info("Received unwatch request", product_url)
+    await interaction.response.defer(thinking=True)
+
+    product_name = get_product_name(product_url)
+    if not data_manager.product_exists(product_url):
+        Logger.warn("Tried to unwatch a product that's not being watched", product_url)
+        embed = discord.Embed(
+            title="🚫 Not Watching",
+            description=f"[{product_name}]({product_url}) is not being watched.",
+            color=0xff0000
+        )
+        await interaction.followup.send(embed=embed)
+    else:
+        data_manager.remove_product_url(product_url)
+        Logger.info('Stopped watching product', product_url)
+        embed = discord.Embed(
+            title="✅ Stopped Watching",
+            description=f"Stopped watching [{product_name}]({product_url})",
+            color=0x00ff00
+        )
+        await interaction.followup.send(embed=embed)
 
 
 @client.tree.command(name="check_stock", description="Check the current stock level of a product")
 async def check_stock(interaction: discord.Interaction, product_url: str):
     Logger.info('Checking stock for product', product_url)
-    await interaction.response.send_message("Checking stock levels, please wait...")
+    await interaction.response.send_message("🔍 Checking stock levels, please wait...")
 
     try:
         data = await fetch_product_data(product_url)
@@ -52,10 +123,16 @@ async def check_stock(interaction: discord.Interaction, product_url: str):
 
         embed.set_footer(text=f"🕒 Time: {get_current_time()} (UK)")
 
-        await interaction.edit_original_response(content=f"🔍 **Stock Check Result for {data['name']}**", embed=embed)
+        await interaction.edit_original_response(content=f"🔍 Stock Check Result for {data['name']}\n", embed=embed)
     except Exception as err:
         Logger.error(f'Error occurred while fetching stock details for {product_url}', err)
-        await interaction.followup.send("Unable to retrieve product data. Please try again later.")
+
+        embed = discord.Embed(
+            title="Error",
+            description="⚠️ Unable to retrieve product data. Please make sure the link is correct. [Contact Developer](https://chanpreet-portfolio.vercel.app/#connect)",
+            color=0xff0000
+        )
+        await interaction.edit_original_response(embed=embed)
     finally:
         Logger.info('Finished checking stock for product', product_url)
 

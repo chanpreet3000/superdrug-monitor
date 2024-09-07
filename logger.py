@@ -59,11 +59,8 @@ class Logger:
             colored_log_level = f"{Fore.MAGENTA}{logging.getLevelName(level):<10}"
             colored_message = f"{Fore.MAGENTA}{message:<60}"
 
-        # Color the PID blue
-        # colored_pid = f"{Fore.BLUE}PID:{pid:<7}"
-
         # Color the file path white
-        colored_file_path = f"{Fore.WHITE}{file_path_info:<60}"
+        colored_file_path = f"{Fore.WHITE}{file_path_info}"
 
         # Color the details bright white
         colored_details = f"{Fore.LIGHTWHITE_EX}{details}"

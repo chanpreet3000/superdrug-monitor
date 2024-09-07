@@ -14,3 +14,5 @@ if __name__ == "__main__":
     except Exception as e:
         traceback.print_exc()
         Logger.critical('Internal error occurred', e)
+    finally:
+        Logger.critical('Shutting down bot...')
