@@ -1,9 +1,15 @@
+import os
+
 import discord
 from discord import app_commands
 
 from data_manager import DataManager
 from logger import Logger
 from utils import fetch_product_data, get_current_time, get_product_name
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Bot(discord.Client):
@@ -14,7 +20,9 @@ class Bot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
+        # This ensures that the command tree is synced when the bot starts up
         await self.tree.sync()
+        Logger.info("Command tree synced")
 
 
 client = Bot()
@@ -39,7 +47,7 @@ async def watch(interaction: discord.Interaction, product_url: str):
         Logger.info(f"Started watching product: {product_url}")
         embed = discord.Embed(
             title="✅ Now Watching",
-            description=f"Started watching [{get_product_name(product_url)}]({product_url})",
+            description=f"Started watching [{get_product_name(product_url)}]({product_url}). Will notify you when it's back in stock.",
             color=0x00ff00
         )
         await interaction.followup.send(embed=embed)
@@ -137,6 +145,52 @@ async def check_stock(interaction: discord.Interaction, product_url: str):
         Logger.info('Finished checking stock for product', product_url)
 
 
+@client.tree.command(name="clear_all", description="Clear all watched products")
+async def clear_all(interaction: discord.Interaction):
+    Logger.info("Received clear all request")
+    await interaction.response.defer(thinking=True)
+
+    watched_products = data_manager.get_all_product_urls()
+    if not watched_products:
+        Logger.warn("No products to clear")
+        embed = discord.Embed(
+            title="🚫 No Watched Products",
+            description="There are no products currently being watched.",
+            color=0xff0000
+        )
+    else:
+        product_len = len(watched_products)
+        data_manager.clear_all_products()
+        Logger.info('Cleared all watched products')
+        embed = discord.Embed(
+            title="✅ All Watches Cleared",
+            description=f"Stopped watching all {product_len} products.",
+            color=0x00ff00
+        )
+
+    await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="set_channel", description="Set the channel for stock notifications")
+@app_commands.checks.has_permissions(administrator=True)
+async def set_channel(interaction: discord.Interaction):
+    Logger.info(f"Setting notification channel: {interaction.channel.id}")
+    data_manager.set_notification_channel(interaction.channel.id)
+
+    embed = discord.Embed(
+        title="✅ Notification Channel Set",
+        description=f"This channel will now receive stock notifications.",
+        color=0x00ff00
+    )
+    await interaction.response.send_message(embed=embed)
+
+
 @client.event
 async def on_ready():
     Logger.debug('Logged in successfully! Bot is now online & ready to use', client.user)
+
+
+async def init_bot():
+    discord_token = os.getenv('DISCORD_BOT_TOKEN')
+    client.run(discord_token)
+    await client.setup_hook()
