@@ -28,8 +28,8 @@ available.
 
 3. Clone the repository:
    ```
-   git clone https://your-repository-url.git
-   cd your-project-directory
+   git clone https://github.com/chanpreet3000/superdrug-monitor
+   cd superdrug-monitor
    ```
 
 4. Create and activate a virtual environment:
