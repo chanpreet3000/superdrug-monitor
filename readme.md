@@ -56,7 +56,7 @@ available.
 
 7. Run the bot:
    ```
-   python3 main.py
+   xvfb-run python3 main.py
    ```
 
 To keep the bot running after you close the SSH session, you can use a process manager like `screen` or `tmux`.
@@ -66,7 +66,7 @@ For example, using `screen`:
 ```
 screen -S stockbot
 source .venv/bin/activate
-python3 main.py
+xvfb-run python3 main.py
 ```
 
 Then press `Ctrl+A` followed by `D` to detach from the screen session.
