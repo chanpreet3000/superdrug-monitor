@@ -3,9 +3,14 @@ from logger import Logger
 
 
 class DataManager:
-    def __init__(self):
-        self.filename = 'database.json'
-        self.data = self.init()
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DataManager, cls).__new__(cls)
+            cls._instance.filename = 'database.json'
+            cls._instance.data = cls._instance.init()
+        return cls._instance
 
     def init(self):
         try:

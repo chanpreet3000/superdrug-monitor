@@ -9,6 +9,8 @@ from utils import fetch_product_data, get_current_time, get_product_name
 
 from dotenv import load_dotenv
 
+from watch_stock_cron import check_watch_stocks
+
 load_dotenv()
 
 
@@ -20,7 +22,6 @@ class Bot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
-        # This ensures that the command tree is synced when the bot starts up
         await self.tree.sync()
         Logger.info("Command tree synced")
 
@@ -185,12 +186,21 @@ async def set_channel(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+@client.tree.command(name="check_all_stocks", description="Manually trigger stock check for all watched products")
+async def check_all_stocks(interaction: discord.Interaction):
+    Logger.info("Manually triggered stock check for all products")
+    await interaction.response.defer(thinking=True)
+
+    await check_watch_stocks(client)
+    await interaction.followup.send("✅ Stock check completed for all watched products.")
+
+
 @client.event
 async def on_ready():
-    Logger.debug('Logged in successfully! Bot is now online & ready to use', client.user)
+    Logger.debug(f'Logged in successfully! Bot is now online & ready to use: {client.user}')
+    await client.tree.sync()
 
 
-async def init_bot():
+def init_bot():
     discord_token = os.getenv('DISCORD_BOT_TOKEN')
     client.run(discord_token)
-    await client.setup_hook()

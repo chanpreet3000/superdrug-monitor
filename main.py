@@ -1,4 +1,3 @@
-import asyncio
 import traceback
 
 from logger import Logger
@@ -6,7 +5,7 @@ from discord_bot import init_bot
 
 if __name__ == "__main__":
     try:
-        asyncio.run(init_bot())
+        init_bot()
     except Exception as e:
         traceback.print_exc()
         Logger.critical('Internal error occurred', e)
