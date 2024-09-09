@@ -60,8 +60,8 @@ async def fetch_product_data(url):
             try:
                 options_data.append({
                     'stockLevel': option['stock']['stockLevel'],
-                    'stockLevelStatus': 'In Stock' if option['stock'][
-                                                          'stockLevelStatus'] == 'inStock' else 'Out of Stock',
+                    'isInStock': option['stock']['stockLevelStatus'] != 'outOfStock',
+                    'stockLevelStatus': option['stock']['stockLevelStatus'],
                     'name': variant_name,
                     'url': f"https://www.superdrug.com{option['url']}"
                 })

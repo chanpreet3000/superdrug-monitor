@@ -72,7 +72,7 @@ async def get_watched(interaction: discord.Interaction):
         Logger.warn("No products are being watched")
         embed = discord.Embed(
             title="🚫 No Watched Products",
-            description="🚫 No products are currently being watched.",
+            description="No products are currently being watched.",
             color=0xff0000
         )
 

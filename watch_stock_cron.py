@@ -13,7 +13,7 @@ async def check_watch_stocks(client):
     for product_url in watched_products:
         try:
             data = await fetch_product_data(product_url)
-            in_stock = any(option['stockLevelStatus'] == 'In Stock' for option in data['options'])
+            in_stock = any(option['isInStock'] for option in data['options'])
 
             if in_stock:
                 embed = create_stock_embed(data)
@@ -35,7 +35,7 @@ def create_stock_embed(data):
     embed.set_thumbnail(url=data['image'])
 
     for option in data['options']:
-        if option['stockLevelStatus'] == 'In Stock':
+        if option['isInStock']:
             embed.add_field(
                 name='Variant',
                 value=f"[{option['name']}]({option['url']})",
