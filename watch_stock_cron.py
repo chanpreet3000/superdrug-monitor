@@ -7,10 +7,11 @@ data_manager = DataManager()
 
 
 async def check_watch_stocks(client):
-    Logger.info("Checking stock for watched products")
     watched_products = data_manager.get_all_product_urls().copy()
+    Logger.info(f"Starting stock check for {len(watched_products)} watched products")
 
     for product_url in watched_products:
+        Logger.info('Checking stock for', product_url)
         try:
             data = await fetch_product_data(product_url)
             in_stock = any(option['isInStock'] for option in data['options'])
@@ -28,9 +29,12 @@ async def check_watch_stocks(client):
                 color=0xff0000
             )
             await notify_users(client, error_embed)
+        finally:
+            Logger.info(f"Finished checking stock for {product_url}")
 
 
 def create_stock_embed(data):
+    Logger.info(f"Creating stock embed for {data['name']}")
     embed = discord.Embed(title=data['name'], url=data['product_url'], color=0x00ff00)
     embed.set_thumbnail(url=data['image'])
 
@@ -57,4 +61,7 @@ async def notify_users(client, embed):
     if channel_id:
         channel = client.get_channel(channel_id)
         if channel:
+            Logger.info("Notifying users about stock availability")
             await channel.send(content="@here Product is now in stock!", embed=embed)
+            return
+    Logger.error("Notification channel not found or invalid")

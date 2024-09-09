@@ -193,24 +193,24 @@ async def set_channel(interaction: discord.Interaction):
 async def check_all_stocks(interaction: discord.Interaction):
     Logger.info("Manually triggered stock check for all products")
     await interaction.response.defer(thinking=True)
-
     await check_watch_stocks(client)
     await interaction.followup.send("✅ Stock check completed for all watched products.")
 
 
 @tasks.loop(seconds=watch_product_cron_delay_seconds)
 async def watched_products_stock_cron():
-    Logger.debug("Running stock check cron")
+    Logger.info("Starting scheduled stock check")
     await check_watch_stocks(client)
-    Logger.debug(f"Stock check cron completed. Waiting for next run after {watch_product_cron_delay_seconds} seconds.")
+    Logger.info(f"Scheduled stock check completed. Next run in {watch_product_cron_delay_seconds} seconds.")
 
 
 @client.event
 async def on_ready():
-    Logger.debug(f'Logged in successfully! Bot is now online & ready to use: {client.user}')
+    Logger.info(f'Bot is now online and ready to use: {client.user}')
     watched_products_stock_cron.start()
 
 
 def init_bot():
+    Logger.info("Initializing Discord bot")
     discord_token = os.getenv('DISCORD_BOT_TOKEN')
     client.run(discord_token)
