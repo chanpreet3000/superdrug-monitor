@@ -2,6 +2,7 @@ import os
 
 import discord
 from discord import app_commands
+from discord.ext import tasks
 
 from data_manager import DataManager
 from logger import Logger
@@ -12,6 +13,8 @@ from dotenv import load_dotenv
 from watch_stock_cron import check_watch_stocks
 
 load_dotenv()
+
+watch_product_cron_delay_seconds = int(os.getenv('WATCH_PRODUCT_CRON_DELAY_SECONDS', 60 * 60))
 
 
 class Bot(discord.Client):
@@ -195,10 +198,17 @@ async def check_all_stocks(interaction: discord.Interaction):
     await interaction.followup.send("✅ Stock check completed for all watched products.")
 
 
+@tasks.loop(seconds=watch_product_cron_delay_seconds)
+async def watched_products_stock_cron():
+    Logger.debug("Running stock check cron")
+    await check_watch_stocks(client)
+    Logger.debug(f"Stock check cron completed. Waiting for next run after {watch_product_cron_delay_seconds} seconds.")
+
+
 @client.event
 async def on_ready():
     Logger.debug(f'Logged in successfully! Bot is now online & ready to use: {client.user}')
-    await client.tree.sync()
+    watched_products_stock_cron.start()
 
 
 def init_bot():
