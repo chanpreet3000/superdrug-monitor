@@ -1,6 +1,7 @@
 # Stock Watch Discord Bot
 
-This Discord bot allows users to watch for stock availability of products and receive notifications when they become available.
+This Discord bot allows users to watch for stock availability of products and receive notifications when they become
+available.
 
 ## Bot Commands
 
@@ -61,16 +62,20 @@ This Discord bot allows users to watch for stock availability of products and re
 To keep the bot running after you close the SSH session, you can use a process manager like `screen` or `tmux`.
 
 For example, using `screen`:
+
 ```
 screen -S stockbot
 source .venv/bin/activate
 python3 discord_bot.py
 ```
+
 Then press `Ctrl+A` followed by `D` to detach from the screen session.
 
 To reattach to the session later:
+
 ```
 screen -r stockbot
 ```
 
-Remember to set up proper security groups and firewall rules for your EC2 instance to allow incoming Discord bot traffic.
+Remember to set up proper security groups and firewall rules for your EC2 instance to allow incoming Discord bot
+traffic.
