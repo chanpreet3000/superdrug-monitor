@@ -65,6 +65,7 @@ For example, using `screen`:
 
 ```
 screen -S stockbot
+pkill Xvfb
 source .venv/bin/activate
 xvfb-run python3 main.py
 ```
