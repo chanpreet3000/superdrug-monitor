@@ -46,6 +46,7 @@ async def fetch_product_data(url):
         except:
             image_url = None
 
+        ean = data['entities'][product_code]['details']['value']['ean']
         options = \
             data['entities'][product_code]['list']['value']['baseOptions'][0][
                 'options']
@@ -69,6 +70,7 @@ async def fetch_product_data(url):
                 pass
 
         response = {
+            'ean': ean,
             'name': product_name,
             'image': image_url,
             'product_code': product_code,

@@ -37,7 +37,11 @@ def create_stock_embed(data):
     Logger.info(f"Creating stock embed for {data['name']}")
     embed = discord.Embed(title=data['name'], url=data['product_url'], color=0x00ff00)
     embed.set_thumbnail(url=data['image'])
-
+    embed.add_field(
+        name='Product EAN',
+        value=data['ean'],
+        inline=False
+    )
     for option in data['options']:
         if option['isInStock']:
             embed.add_field(

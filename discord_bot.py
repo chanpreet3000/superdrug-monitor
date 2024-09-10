@@ -115,6 +115,11 @@ async def check_stock(interaction: discord.Interaction, product_url: str):
     try:
         data = await fetch_product_data(product_url)
         embed = discord.Embed(title=data['name'], url=data['product_url'], color=0x00ff00)
+        embed.add_field(
+            name='Product EAN',
+            value=data['ean'],
+            inline=False
+        )
 
         for option in data['options']:
             embed.add_field(
