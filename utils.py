@@ -50,6 +50,10 @@ async def fetch_product_data(url):
         options = \
             data['entities'][product_code]['list']['value']['baseOptions'][0][
                 'options']
+        selected = data['entities'][product_code]['list']['value']['baseOptions'][0][
+            'selected']
+        default_stock_level = selected['stock']['stockLevel']
+        default_stock_status = selected['stock']['stockLevelStatus']
 
         options_data = []
         for option in options:
@@ -59,10 +63,17 @@ async def fetch_product_data(url):
                 variant_name = product_name
 
             try:
+                stock_level = option['stock']['stockLevel']
+                stock_status = option['stock']['stockLevelStatus']
+            except:
+                stock_level = default_stock_level
+                stock_status = default_stock_status
+
+            try:
                 options_data.append({
-                    'stockLevel': option['stock']['stockLevel'],
-                    'isInStock': option['stock']['stockLevelStatus'] != 'outOfStock',
-                    'stockLevelStatus': option['stock']['stockLevelStatus'],
+                    'stockLevel': stock_level,
+                    'isInStock': stock_status != 'outOfStock',
+                    'stockLevelStatus': stock_status,
                     'name': variant_name,
                     'url': f"https://www.superdrug.com{option['url']}"
                 })

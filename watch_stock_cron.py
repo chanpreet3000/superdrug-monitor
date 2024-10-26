@@ -61,11 +61,15 @@ def create_stock_embed(data):
 
 
 async def notify_users(client, embed):
-    channel_id = data_manager.get_notification_channel()
-    if channel_id:
-        channel = client.get_channel(channel_id)
+    channel_ids = data_manager.get_notification_channels()
+
+    for channel_id in channel_ids:
+        channel = client.get_channel(int(channel_id))
         if channel:
-            Logger.info("Notifying users about stock availability")
-            await channel.send(content="@here Product is now in stock!", embed=embed)
-            return
-    Logger.error("Notification channel not found or invalid")
+            try:
+                Logger.info(f"Sending notification to channel: {channel_id}")
+                await channel.send(content="@here Product is now in stock!", embed=embed)
+            except Exception as err:
+                Logger.error(f"Failed to send notification to channel {channel_id}: {err}")
+        else:
+            Logger.error(f"Could not find channel with ID: {channel_id}")

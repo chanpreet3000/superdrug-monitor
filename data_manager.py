@@ -17,13 +17,15 @@ class DataManager:
         try:
             with open(self.filename, 'r') as file:
                 data = json.load(file)
-                return {
+                data = {
                     'products': set(data.get('products', [])),
-                    'channel': data.get('channel', None)
+                    'channels': set(data.get('channels', []))
                 }
+                Logger.info("DataManager initialized with data", data)
+                return data
         except FileNotFoundError:
             Logger.warn(f"Database file {self.filename} not found. Initializing with empty data.")
-            return {'products': set(), 'channel': None}
+            return {'products': set(), 'channels': set()}
         except json.JSONDecodeError as error:
             Logger.error('Error initializing DataManager:', error)
             raise
@@ -34,7 +36,7 @@ class DataManager:
             with open(self.filename, 'w') as file:
                 json.dump({
                     'products': list(self.data['products']),
-                    'channel': self.data['channel']
+                    'channels': list(self.data['channels'])
                 }, file, indent=2)
         except IOError as error:
             Logger.error('Error saving data:', error)
@@ -70,12 +72,29 @@ class DataManager:
         self.data['products'].clear()
         self.save()
 
-    def set_notification_channel(self, channel_id):
-        """Set the channel ID for notifications."""
-        Logger.info(f"Setting notification channel: {channel_id}")
-        self.data['channel'] = channel_id
+    def add_notification_channel(self, channel_id):
+        """Add a channel ID to the notification channels set."""
+        Logger.info(f"Adding notification channel: {channel_id}")
+        self.data['channels'].add(channel_id)
         self.save()
+        return len(self.data['channels'])
 
-    def get_notification_channel(self):
-        """Get the channel ID for notifications."""
-        return self.data['channel']
+    def remove_notification_channel(self, channel_id):
+        """Remove a channel ID from the notification channels set."""
+        Logger.info(f"Removing notification channel: {channel_id}")
+        if channel_id in self.data['channels']:
+            self.data['channels'].remove(channel_id)
+            self.save()
+            Logger.info(f"Channel '{channel_id}' removed.")
+            return True
+        else:
+            Logger.warn(f"Channel '{channel_id}' not found in notification channels.")
+            return False
+
+    def get_notification_channels(self):
+        """Get all notification channel IDs."""
+        return self.data['channels']
+
+    def channel_exists(self, channel_id):
+        """Check if a channel ID exists in the notification channels set."""
+        return channel_id in self.data['channels']
