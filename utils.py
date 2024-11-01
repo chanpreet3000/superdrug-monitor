@@ -1,16 +1,23 @@
-from datetime import datetime
-from typing import List, Tuple
+import os
+import random
 
 import discord
 import pytz
-from Logger import Logger
 import requests
-from bs4 import BeautifulSoup
 import json
 
-cookies = {
-    'cookie': 'cookie'
-}
+from datetime import datetime
+from typing import Tuple
+from Logger import Logger
+from bs4 import BeautifulSoup
+from typing import List, Dict
+from dotenv import load_dotenv
+
+load_dotenv()
+
+WEBSHARE_API_TOKEN = os.getenv('WEBSHARE_API_TOKEN')
+
+cookies = {}
 
 headers = {
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -29,6 +36,26 @@ headers = {
     'upgrade-insecure-requests': '1',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
 }
+
+
+def get_proxies_from_webshare() -> List[Dict[str, str]]:
+    response = requests.get(
+        "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100",
+        headers={"Authorization": f"Token {WEBSHARE_API_TOKEN}"}
+    )
+
+    proxies_data = response.json()
+    proxies_list = proxies_data.get('results', [])
+
+    formatted_proxies = []
+    for proxy in proxies_list:
+        proxy_url = f"http://{proxy['username']}:{proxy['password']}@{proxy['proxy_address']}:{proxy['port']}"
+        formatted_proxies.append({'http': proxy_url, 'https': proxy_url})
+
+    if len(formatted_proxies) == 0:
+        raise Exception("No proxies available")
+    Logger.info(f"Loaded {len(formatted_proxies)} proxies from Webshare")
+    return formatted_proxies
 
 
 def get_current_time():
@@ -101,10 +128,12 @@ def get_product_data(product_data: ProductData) -> discord.Embed:
 
 
 def fetch_product_data(url) -> Tuple[discord.Embed, ProductData | None]:
+    proxies = get_proxies_from_webshare()
+    random_proxy = random.choice(proxies)
     try:
         Logger.info(f'Fetching product data from {url}')
 
-        response = requests.get(url, headers=headers, cookies=cookies)
+        response = requests.get(url, headers=headers, cookies=cookies, proxies=random_proxy)
         response.raise_for_status()
 
         # Parse the page content
