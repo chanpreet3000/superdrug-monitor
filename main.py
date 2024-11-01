@@ -1,6 +1,6 @@
 import traceback
 
-from logger import Logger
+from Logger import Logger
 from discord_bot import init_bot
 
 if __name__ == "__main__":

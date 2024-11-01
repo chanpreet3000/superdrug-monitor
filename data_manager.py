@@ -1,5 +1,5 @@
 import json
-from logger import Logger
+from Logger import Logger
 
 
 class DataManager:
@@ -21,7 +21,7 @@ class DataManager:
                     'products': set(data.get('products', [])),
                     'channels': set(data.get('channels', []))
                 }
-                Logger.info("DataManager initialized with data", data)
+                Logger.info("DataManager initialized with data")
                 return data
         except FileNotFoundError:
             Logger.warn(f"Database file {self.filename} not found. Initializing with empty data.")

@@ -5,8 +5,8 @@ from discord import app_commands
 from discord.ext import tasks
 
 from data_manager import DataManager
-from logger import Logger
-from utils import fetch_product_data, get_current_time, get_product_name
+from Logger import Logger
+from utils import fetch_product_data, get_product_name
 
 from dotenv import load_dotenv
 
@@ -112,49 +112,14 @@ async def check_stock(interaction: discord.Interaction, product_url: str):
     Logger.info('Checking stock for product', product_url)
     await interaction.response.send_message("🔍 Checking stock levels, please wait...")
 
-    try:
-        data = await fetch_product_data(product_url)
-        embed = discord.Embed(title=data['name'], url=data['product_url'], color=0x00ff00)
-        embed.add_field(
-            name='Product EAN',
-            value=data['ean'],
-            inline=False
-        )
-
-        for option in data['options']:
-            embed.add_field(
-                name='Variant',
-                value=f'[{option["name"]}]({option["url"]})',
-                inline=True
-            )
-            embed.add_field(
-                name='Stock',
-                value=f"{option['stockLevel']} - {option['stockLevelStatus']}",
-                inline=True
-            )
-            embed.add_field(
-                name='\u200b',
-                value='\u200b',
-                inline=False
-            )
-
-        embed.set_footer(text=f"🕒 Time: {get_current_time()} (UK)")
-
-        await interaction.edit_original_response(content=f"🔍 Stock Check Result for {data['name']}\n", embed=embed)
-    except Exception as err:
-        Logger.error(f'Error occurred while fetching stock details for {product_url}', err)
-
-        embed = discord.Embed(
-            title="Error",
-            description="⚠️ Unable to retrieve product data. Please make sure the link is correct. [Contact Developer](https://chanpreet-portfolio.vercel.app/#connect)",
-            color=0xff0000
-        )
-        await interaction.edit_original_response(embed=embed)
-    finally:
-        Logger.info('Finished checking stock for product', product_url)
+    embed, _ = fetch_product_data(product_url)
+    await interaction.edit_original_response(content=f"🔍 Stock Check Result Completed",
+                                             embed=embed)
+    Logger.info('Finished checking stock for product', product_url)
 
 
 @client.tree.command(name="sdm_clear_all", description="Clear all watched products")
+@app_commands.checks.has_permissions(administrator=True)
 async def clear_all(interaction: discord.Interaction):
     Logger.info("Received clear all request")
     await interaction.response.defer(thinking=True)
@@ -251,7 +216,7 @@ async def check_all_stocks(interaction: discord.Interaction):
     Logger.info("Manually triggered stock check for all products")
     await interaction.response.defer(thinking=True)
     await check_watch_stocks(client)
-    await interaction.followup.send("✅ Stock check completed for all watched products.")
+    await interaction.edit_original_response(content="🔍 Manually triggered stock check completed.")
 
 
 @tasks.loop(seconds=watch_product_cron_delay_seconds)
