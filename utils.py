@@ -128,84 +128,93 @@ def get_product_data(product_data: ProductData) -> discord.Embed:
 
 
 def fetch_product_data(url) -> Tuple[discord.Embed, ProductData | None]:
+    max_retries = 3
     proxies = get_proxies_from_webshare()
-    random_proxy = random.choice(proxies)
-    try:
-        Logger.info(f'Fetching product data from {url}')
-
-        response = requests.get(url, headers=headers, cookies=cookies, proxies=random_proxy)
-        response.raise_for_status()
-
-        # Parse the page content
-        soup = BeautifulSoup(response.content, 'html.parser')
-
-        # Locate the script tag with the product data
-        script_tag = soup.find(id='spartacus-app-state')
-        if not script_tag:
-            raise Exception('Product data not found in the page')
-
-        # Process the script content as JSON
+    for attempt in range(max_retries):
         try:
-            cleaned_content = script_tag.string.replace('&q;', '"').replace('&l;', '<').replace('&g;', '>')
-            data = json.loads(cleaned_content)['cx-state']['product']['details']
-        except json.JSONDecodeError:
-            raise Exception('Failed to parse product JSON data')
-
-        # Extract product details from JSON data
-        product_code = url.split('/')[-1]
-        product_name = get_product_name(url)
-
-        try:
-            image_url = data['entities'][product_code]['variants']['value']['images']['PRIMARY']['thumbnail']['url']
-        except KeyError:
-            image_url = None
-
-        ean = data['entities'][product_code]['details']['value']['ean']
-        options = data['entities'][product_code]['list']['value']['baseOptions'][0]['options']
-        selected = data['entities'][product_code]['list']['value']['baseOptions'][0]['selected']
-        default_stock_level = selected['stock']['stockLevel']
-        default_stock_status = selected['stock']['stockLevelStatus']
-
-        # Process each option to extract variant information
-        options_data = []
-        for option in options:
-            try:
-                variant_name = f"{option['variantOptionQualifiers'][0]['name']} - {option['variantOptionQualifiers'][0]['value']}"
-            except (KeyError, IndexError):
-                variant_name = product_name
-
-            try:
-                stock_level = option['stock']['stockLevel']
-                stock_status = option['stock']['stockLevelStatus']
-            except KeyError:
-                stock_level = default_stock_level
-                stock_status = default_stock_status
-
-            options_data.append(
-                ProductOptions(
-                    name=variant_name,
-                    stock_level=stock_level,
-                    is_in_stock=stock_status != 'outOfStock',
-                    stock_status=stock_status,
-                    url=f"https://www.superdrug.com{option['url']}"
-                )
+            random_proxy = random.choice(proxies)
+            Logger.info(f'Attempt {attempt + 1}: Fetching product data from {url}')
+            response = requests.get(
+                url,
+                headers=headers,
+                cookies=cookies,
+                proxies=random_proxy,
+                timeout=10
             )
+            response.raise_for_status()
 
-        product_data = ProductData(
-            ean=ean,
-            name=product_name,
-            image=image_url,
-            product_code=product_code,
-            options=options_data,
-            product_url=url
-        )
+            # Parse the page content
+            soup = BeautifulSoup(response.content, 'html.parser')
 
-        Logger.info(f'Successfully fetched product data from {url}', product_data.to_dict())
-        return get_product_data(product_data), product_data
-    except Exception as e:
-        Logger.error(f'Error fetching product data from {url}', e)
-        return discord.Embed(
-            title='Error',
-            description=f'Failed to fetch product data from {url}.  Please make sure the url is correct',
-            color=0xff0000
-        ), None
+            # Locate the script tag with the product data
+            script_tag = soup.find(id='spartacus-app-state')
+            if not script_tag:
+                raise Exception('Product data not found in the page')
+
+            # Process the script content as JSON
+            try:
+                cleaned_content = script_tag.string.replace('&q;', '"').replace('&l;', '<').replace('&g;', '>')
+                data = json.loads(cleaned_content)['cx-state']['product']['details']
+            except json.JSONDecodeError:
+                raise Exception('Failed to parse product JSON data')
+
+            # Extract product details from JSON data
+            product_code = url.split('/')[-1]
+            product_name = get_product_name(url)
+
+            try:
+                image_url = data['entities'][product_code]['variants']['value']['images']['PRIMARY']['thumbnail']['url']
+            except KeyError:
+                image_url = None
+
+            ean = data['entities'][product_code]['details']['value']['ean']
+            options = data['entities'][product_code]['list']['value']['baseOptions'][0]['options']
+            selected = data['entities'][product_code]['list']['value']['baseOptions'][0]['selected']
+            default_stock_level = selected['stock']['stockLevel']
+            default_stock_status = selected['stock']['stockLevelStatus']
+
+            # Process each option to extract variant information
+            options_data = []
+            for option in options:
+                try:
+                    variant_name = f"{option['variantOptionQualifiers'][0]['name']} - {option['variantOptionQualifiers'][0]['value']}"
+                except (KeyError, IndexError):
+                    variant_name = product_name
+
+                try:
+                    stock_level = option['stock']['stockLevel']
+                    stock_status = option['stock']['stockLevelStatus']
+                except KeyError:
+                    stock_level = default_stock_level
+                    stock_status = default_stock_status
+
+                options_data.append(
+                    ProductOptions(
+                        name=variant_name,
+                        stock_level=stock_level,
+                        is_in_stock=stock_status != 'outOfStock',
+                        stock_status=stock_status,
+                        url=f"https://www.superdrug.com{option['url']}"
+                    )
+                )
+
+            product_data = ProductData(
+                ean=ean,
+                name=product_name,
+                image=image_url,
+                product_code=product_code,
+                options=options_data,
+                product_url=url
+            )
+            Logger.info(f'Successfully fetched product data from {url}', product_data.to_dict())
+            return get_product_data(product_data), product_data
+        except Exception as e:
+            Logger.error(f'Error fetching product data from {url}', e)
+            continue
+
+    Logger.error(f'Error fetching product data from {url}')
+    return discord.Embed(
+        title='Error',
+        description=f'Failed to fetch product data from {url}.  Please make sure the url is correct',
+        color=0xff0000
+    ), None

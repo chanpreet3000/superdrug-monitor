@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import discord
@@ -215,14 +216,14 @@ async def list_channels(interaction: discord.Interaction):
 async def check_all_stocks(interaction: discord.Interaction):
     Logger.info("Manually triggered stock check for all products")
     await interaction.response.defer(thinking=True)
-    await check_watch_stocks(client)
+    await asyncio.create_task(check_watch_stocks(client))
     await interaction.edit_original_response(content="🔍 Manually triggered stock check completed.")
 
 
 @tasks.loop(seconds=watch_product_cron_delay_seconds)
 async def watched_products_stock_cron():
     Logger.info("Starting scheduled stock check")
-    await check_watch_stocks(client)
+    await asyncio.create_task(check_watch_stocks(client))
     Logger.info(f"Scheduled stock check completed. Next run in {watch_product_cron_delay_seconds} seconds.")
 
 
