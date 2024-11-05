@@ -1,21 +1,18 @@
-import asyncio
 import os
 
 import discord
 from discord import app_commands
-from discord.ext import tasks
-
-from data_manager import DataManager
 from Logger import Logger
-from utils import fetch_product_data, get_product_name
-
 from dotenv import load_dotenv
+from discord.ext import tasks
+from DatabaseManager import DatabaseManager
 
-from watch_stock_cron import check_watch_stocks
+from utils import fetch_product_data
+from watch_stock_cron import watch_stock_cron
 
 load_dotenv()
 
-watch_product_cron_delay_seconds = int(os.getenv('WATCH_PRODUCT_CRON_DELAY_SECONDS', 60 * 60))
+watch_product_cron_delay_seconds = int(os.getenv('WATCH_PRODUCT_CRON_DELAY_SECONDS', 60 * 60))  # 1 hour
 
 
 class Bot(discord.Client):
@@ -24,6 +21,7 @@ class Bot(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
+        self.db = DatabaseManager()
 
     async def setup_hook(self):
         await self.tree.sync()
@@ -31,209 +29,265 @@ class Bot(discord.Client):
 
 
 client = Bot()
-data_manager = DataManager()
 
 
-@client.tree.command(name="sdm_watch", description="Get notified when a product is back in stock")
-async def watch(interaction: discord.Interaction, product_url: str):
-    Logger.info(f"Received watch request for: {product_url}")
+@client.tree.command(name="sd-add-product", description="Add a product URL to watch on Superdrug")
+async def add_product(interaction: discord.Interaction, url: str):
+    Logger.info(f"Received add product request for URL: {url}")
     await interaction.response.defer(thinking=True)
 
-    if data_manager.product_exists(product_url):
-        Logger.warn(f"Product already being watched: {product_url}")
-        embed = discord.Embed(
-            title="🔔 Already Watching",
-            description=f"Already watching [{get_product_name(product_url)}]({product_url})",
-            color=0xffcc00  # Yellow for existing watch
-        )
-        await interaction.followup.send(embed=embed)
-    else:
-        data_manager.add_product_url(product_url)
-        Logger.info(f"Started watching product: {product_url}")
-        embed = discord.Embed(
-            title="✅ Now Watching",
-            description=f"Started watching [{get_product_name(product_url)}]({product_url}). Will notify you when it's back in stock.",
-            color=0x00ff00
-        )
-        await interaction.followup.send(embed=embed)
+    try:
+        embed, product_data = await fetch_product_data(url, max_retries=5)
+        if product_data is None:
+            await interaction.followup.send(
+                content="❌ Failed to fetch product data. Please make sure the URL is correct or try again."
+            )
+            return
 
+        option_to_watch = None
+        for opt in product_data.options:
+            if opt.product_code == product_data.product_code:
+                option_to_watch = opt
+                break
 
-@client.tree.command(name="sdm_get_watched", description="Get all watched product URLs")
-async def get_watched(interaction: discord.Interaction):
-    Logger.info("Fetching all watched products")
-    await interaction.response.defer(thinking=True)
+        if option_to_watch is None:
+            await interaction.followup.send(
+                content="❌ Failed to find product option to watch. Please make sure the URL is correct or try again."
+            )
+            return
 
-    watched_products = data_manager.get_all_product_urls()
-    Logger.debug(f"Watched products retrieved: {watched_products}")
-    if watched_products:
-        response = "\n".join([f"{i + 1}. [{get_product_name(url)}]({url})" for i, url in enumerate(watched_products)])
+        if client.db.add_watch_product(url):
+            embed = discord.Embed(
+                title=f"✅ {option_to_watch.name}",
+                url=option_to_watch.product_url,
+                description=f"Started watching product",
+                color=0x00ff00
+            )
+        else:
+            embed = discord.Embed(
+                title=f"⚠️ {option_to_watch.name}",
+                url=option_to_watch.product_url,
+                description=f"This product is already being watched",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error(f'Error adding product: {url}', e)
         embed = discord.Embed(
-            title="📋 Watched Products",
-            description=response,
-            color=0x00ccff
-        )
-    else:
-        Logger.warn("No products are being watched")
-        embed = discord.Embed(
-            title="🚫 No Watched Products",
-            description="No products are currently being watched.",
+            title="❌ Error",
+            description=f"An error occurred while adding the product.\n{str(e)}",
             color=0xff0000
         )
 
     await interaction.followup.send(embed=embed)
 
 
-@client.tree.command(name="sdm_unwatch", description="Stop watching a product")
-async def unwatch(interaction: discord.Interaction, product_url: str):
-    Logger.info("Received unwatch request", product_url)
+@client.tree.command(name="sd-remove-product", description="Remove a product URL from the watch list on Superdrug")
+async def remove_product(interaction: discord.Interaction, product_url: str):
+    Logger.info(f"Received remove product request for URL: {product_url}")
     await interaction.response.defer(thinking=True)
 
-    product_name = get_product_name(product_url)
-    if not data_manager.product_exists(product_url):
-        Logger.warn("Tried to unwatch a product that's not being watched", product_url)
+    try:
+        if client.db.remove_watch_product(product_url):
+            embed = discord.Embed(
+                title="✅ Product Removed",
+                description=f"Stopped watching product: {product_url}",
+                color=0x00ff00
+            )
+        else:
+            embed = discord.Embed(
+                title="⚠️ Not Found",
+                description=f"This product was not being watched: {product_url}",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error('Error removing product:', e)
         embed = discord.Embed(
-            title="🚫 Not Watching",
-            description=f"[{product_name}]({product_url}) is not being watched.",
+            title="❌ Error",
+            description=f"An error occurred while removing the product.\n{str(e)}",
             color=0xff0000
-        )
-        await interaction.followup.send(embed=embed)
-    else:
-        data_manager.remove_product_url(product_url)
-        Logger.info('Stopped watching product', product_url)
-        embed = discord.Embed(
-            title="✅ Stopped Watching",
-            description=f"Stopped watching [{product_name}]({product_url})",
-            color=0x00ff00
-        )
-        await interaction.followup.send(embed=embed)
-
-
-@client.tree.command(name="sdm_check_stock", description="Check the current stock level of a product")
-async def check_stock(interaction: discord.Interaction, product_url: str):
-    Logger.info('Checking stock for product', product_url)
-    await interaction.response.send_message("🔍 Checking stock levels, please wait...")
-
-    embed, _ = fetch_product_data(product_url)
-    await interaction.edit_original_response(content=f"🔍 Stock Check Result Completed",
-                                             embed=embed)
-    Logger.info('Finished checking stock for product', product_url)
-
-
-@client.tree.command(name="sdm_clear_all", description="Clear all watched products")
-@app_commands.checks.has_permissions(administrator=True)
-async def clear_all(interaction: discord.Interaction):
-    Logger.info("Received clear all request")
-    await interaction.response.defer(thinking=True)
-
-    watched_products = data_manager.get_all_product_urls()
-    if not watched_products:
-        Logger.warn("No products to clear")
-        embed = discord.Embed(
-            title="🚫 No Watched Products",
-            description="There are no products currently being watched.",
-            color=0xff0000
-        )
-    else:
-        product_len = len(watched_products)
-        data_manager.clear_all_products()
-        Logger.info('Cleared all watched products')
-        embed = discord.Embed(
-            title="✅ All Watches Cleared",
-            description=f"Stopped watching all {product_len} products.",
-            color=0x00ff00
         )
 
     await interaction.followup.send(embed=embed)
 
 
-@client.tree.command(name="sdm_add_channel", description="Add a notification channel")
+@client.tree.command(name="sd-list-products", description="Show all watched product URLs on Superdrug")
+async def list_products(interaction: discord.Interaction):
+    Logger.info("Received list products request")
+    await interaction.response.defer(thinking=True)
+
+    try:
+        products = client.db.get_all_watch_products()
+        if products:
+            product_list = "\n".join([f"{i + 1}. {url}" for i, url in enumerate(products)])
+            embed = discord.Embed(
+                title="📋 Watched Products",
+                description=product_list,
+                color=0x00ccff
+            )
+        else:
+            embed = discord.Embed(
+                title="📋 Watched Products",
+                description="No products are currently being watched.",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error('Error listing products:', e)
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"An error occurred while fetching the product list.\n{str(e)}",
+            color=0xff0000
+        )
+
+    await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="sd-add-channel",
+                     description="Add a notification channel for Superdrug product stock updates")
 @app_commands.checks.has_permissions(administrator=True)
 async def add_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-    Logger.info(f"Received add channel request for: {channel.id}")
+    Logger.info(f"Received add channel request for channel ID: {channel.id}")
     await interaction.response.defer(thinking=True)
 
-    total_channels = data_manager.add_notification_channel(channel.id)
-    Logger.info(f"Added notification channel: {channel.id}. Total channels: {total_channels}")
-
-    embed = discord.Embed(
-        title="✅ Channel Added",
-        description=f"Added {channel.mention} to the notification channels.",
-        color=0x00ff00
-    )
-    await interaction.followup.send(embed=embed)
-
-
-@client.tree.command(name="sdm_remove-channel", description="Remove a notification channel")
-@app_commands.checks.has_permissions(administrator=True)
-async def remove_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-    Logger.info(f"Received remove channel request for: {channel.id}")
-    await interaction.response.defer(thinking=True)
-
-    data_manager.remove_notification_channel(channel.id)
-    Logger.info(f"Removed notification channel: {channel.id}")
-
-    embed = discord.Embed(
-        title="✅ Channel Removed",
-        description=f"Removed {channel.mention} from notification channels.",
-        color=0x00ff00
-    )
-    await interaction.followup.send(embed=embed)
-
-
-@client.tree.command(name="sdm_list_channels", description="List all channels receiving stock notifications")
-@app_commands.checks.has_permissions(administrator=True)
-async def list_channels(interaction: discord.Interaction):
-    Logger.info("Listing all notification channels")
-    channels = data_manager.get_notification_channels()
-
-    if not channels:
-        Logger.warn("No notification channels configured")
+    try:
+        if client.db.add_discord_channel(str(channel.id)):
+            embed = discord.Embed(
+                title="✅ Channel Added",
+                description=f"Added {channel.mention} to notification channels.",
+                color=0x00ff00
+            )
+        else:
+            embed = discord.Embed(
+                title="⚠️ Already Added",
+                description=f"{channel.mention} is already a notification channel.",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error('Error adding channel:', e)
         embed = discord.Embed(
-            title="📋 Notification Channels",
-            description="No channels are currently set up for notifications.",
+            title="❌ Error",
+            description=f"An error occurred while adding the channel.\n{str(e)}",
             color=0xff0000
         )
-    else:
-        channel_list = []
-        for channel_id in channels:
-            channel = client.get_channel(channel_id)
-            if channel:
-                channel_list.append(f"• {channel.mention} (ID: {channel_id})")
-            else:
-                channel_list.append(f"• Unknown Channel (ID: {channel_id})")
-                Logger.warn(f"Could not find channel with ID {channel_id}")
 
+    await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="sd-remove-channel",
+                     description="Remove a notification channel for Superdrug product stock updates")
+@app_commands.checks.has_permissions(administrator=True)
+async def remove_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    Logger.info(f"Received remove channel request for channel ID: {channel.id}")
+    await interaction.response.defer(thinking=True)
+
+    try:
+        if client.db.remove_discord_channel(str(channel.id)):
+            embed = discord.Embed(
+                title="✅ Channel Removed",
+                description=f"Removed {channel.mention} from notification channels.",
+                color=0x00ff00
+            )
+        else:
+            embed = discord.Embed(
+                title="⚠️ Not Found",
+                description=f"{channel.mention} was not a notification channel.",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error('Error removing channel:', e)
         embed = discord.Embed(
-            title="📋 Notification Channels",
-            description="\n".join(channel_list),
-            color=0x00ccff
+            title="❌ Error",
+            description=f"An error occurred while removing the channel.\n{str(e)}",
+            color=0xff0000
         )
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 
-@client.tree.command(name="sdm_check_all_stocks", description="Manually trigger stock check for all watched products")
-async def check_all_stocks(interaction: discord.Interaction):
-    Logger.info("Manually triggered stock check for all products")
+@client.tree.command(name="sd-list-channels",
+                     description="Show all notification channels for Superdrug product stock updates")
+async def list_channels(interaction: discord.Interaction):
+    Logger.info("Received list channels request")
     await interaction.response.defer(thinking=True)
-    await asyncio.create_task(check_watch_stocks(client))
-    await interaction.edit_original_response(content="🔍 Manually triggered stock check completed.")
+
+    try:
+        channels = client.db.get_all_notification_channels()
+        if channels:
+            channel_mentions = []
+            for channel_id in channels:
+                channel = client.get_channel(int(channel_id))
+                if channel:
+                    channel_mentions.append(f"• {channel.mention}")
+                else:
+                    channel_mentions.append(f"• Unknown Channel (ID: {channel_id})")
+
+            embed = discord.Embed(
+                title="📋 Notification Channels",
+                description="\n".join(channel_mentions),
+                color=0x00ccff
+            )
+        else:
+            embed = discord.Embed(
+                title="📋 Notification Channels",
+                description="No notification channels are configured.",
+                color=0xffcc00
+            )
+    except Exception as e:
+        Logger.error('Error listing channels:', e)
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"An error occurred while fetching the channel list.\n{str(e)}",
+            color=0xff0000
+        )
+
+    await interaction.followup.send(embed=embed)
+
+
+@client.tree.command(name="sd-check-stock", description="Check the stock level of a product on Superdrug.com")
+async def check_stock(interaction: discord.Interaction, product_url: str):
+    Logger.info(f"Received check stock request {product_url}")
+    await interaction.response.defer()
+
+    try:
+        embed, product = await fetch_product_data(product_url, max_retries=5)
+
+        if product is None:
+            await interaction.followup.send(
+                content="❌ Failed to fetch product data. Please make sure the URL is correct or try again."
+            )
+            return
+
+        await interaction.followup.send(
+            content="🔍 Stock Check Result Completed",
+            embed=embed
+        )
+        Logger.info(f'Finished checking stock for product {product_url}')
+    except Exception as e:
+        Logger.error('Error checking stock:', e)
+        error_embed = discord.Embed(
+            title="❌ Error",
+            description=f"An error occurred while checking the product stock.\n{str(e)}",
+            color=0xff0000
+        )
+        await interaction.followup.send(embed=error_embed)
 
 
 @tasks.loop(seconds=watch_product_cron_delay_seconds)
 async def watched_products_stock_cron():
     Logger.info("Starting scheduled stock check")
-    await asyncio.create_task(check_watch_stocks(client))
+    await watch_stock_cron(client)
     Logger.info(f"Scheduled stock check completed. Next run in {watch_product_cron_delay_seconds} seconds.")
 
 
 @client.event
 async def on_ready():
-    Logger.info(f'Bot is now online and ready to use: {client.user}')
+    Logger.info(f"Bot is ready and logged in as {client.user}")
     watched_products_stock_cron.start()
 
 
-def init_bot():
-    Logger.info("Initializing Discord bot")
-    discord_token = os.getenv('DISCORD_BOT_TOKEN')
-    client.run(discord_token)
+def run_bot():
+    token = os.getenv('DISCORD_BOT_TOKEN')
+    if not token:
+        raise ValueError("Discord bot token not found in environment variables")
+
+    Logger.info("Starting bot...")
+    client.run(token)

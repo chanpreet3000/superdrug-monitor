@@ -1,82 +1,35 @@
-# Stock Watch Discord Bot
+# Superdrug Stock Watch Discord Bot
 
-This Discord bot allows users to watch for stock availability of products and receive notifications when they become
-available.
+A Discord bot that monitors Superdrug product availability and sends notifications when products come back in stock. The bot automatically checks product stock at regular intervals and notifies users in designated Discord channels.
 
-## Bot Commands
+## Features
 
-1. `/watch <product_url>`: Start watching a product for stock availability.
-2. `/unwatch <product_url>`: Stop watching a specific product.
-3. `/get_watched`: Get a list of all watched product URLs.
-4. `/check_stock <product_url>`: Check the current stock level of a product.
-5. `/clear_all`: Clear all watched products.
-6. `/set_channel`: Set the current channel for stock notifications (admin only).
-7. `/check_all_stocks`: Manually trigger stock check for all watched products.
+- Automated stock monitoring for Superdrug products
+- Customizable notification channels
+- Easy-to-use slash commands
+- Regular automatic stock checks
+- Support for multiple products and notification channels
 
-## Installation on EC2 Instance (Ubuntu)
+## Discord Commands
 
-1. Connect to your EC2 instance:
-   ```
-   ssh -i your-key.pem ubuntu@your-ec2-ip
-   ```
+### Product Management
+- `/sd-add-product <url>` - Start monitoring a Superdrug product URL for stock availability
+- `/sd-remove-product <url>` - Stop monitoring a specific product
+- `/sd-list-products` - View all currently monitored product URLs
+- `/sd-check-stock <url>` - Manually check the current stock status of a product
 
-2. Update and install required packages:
-   ```
-   sudo apt update
-   sudo apt install python3-pip python3-venv
-   ```
+### Channel Management (Admin Only)
+- `/sd-add-channel <channel>` - Add a Discord channel for stock notifications
+- `/sd-remove-channel <channel>` - Remove a Discord channel from notifications
+- `/sd-list-channels` - View all channels configured for notifications
 
-3. Clone the repository:
-   ```
-   git clone https://github.com/chanpreet3000/superdrug-monitor
-   cd superdrug-monitor
-   ```
+## How It Works
 
-4. Create and activate a virtual environment:
-   ```
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
+The bot performs the following functions:
 
-5. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+1. **Stock Monitoring**: Regularly checks the stock status of watched products
+2. **Notifications**: Sends alerts to configured Discord channels when products become available
+3. **Channel Management**: Allows administrators to control where notifications are sent
+4. **Product Management**: Provides commands to add/remove products from the watch list
 
-6. Create a `.env` file:
-   ```
-   nano .env
-   ```
-   Add the following content:
-   ```
-   DISCORD_BOT_TOKEN=your_discord_bot_token
-   WATCH_PRODUCT_CRON_DELAY_SECONDS=3600
-   ```
-   Replace `your_discord_bot_token` with your actual Discord bot token.
-
-7. Run the bot:
-   ```
-   xvfb-run python3 main.py
-   ```
-
-To keep the bot running after you close the SSH session, you can use a process manager like `screen` or `tmux`.
-
-For example, using `screen`:
-
-```
-screen -S stockbot
-pkill Xvfb
-source .venv/bin/activate
-xvfb-run python3 main.py
-```
-
-Then press `Ctrl+A` followed by `D` to detach from the screen session.
-
-To reattach to the session later:
-
-```
-screen -r stockbot
-```
-
-Remember to set up proper security groups and firewall rules for your EC2 instance to allow incoming Discord bot
-traffic.
+When a product comes back in stock, the bot automatically sends a notification to all configured Discord channels, including product details and the purchase link.
