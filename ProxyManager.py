@@ -66,8 +66,8 @@ class ProxyManager:
                                 break
 
                             for proxy in proxies_list:
-                                proxy_url = f"http://{proxy['username']}:{proxy['password']}@{proxy['proxy_address']}:{proxy['port']}"
-                                formatted_proxies.append({'http': proxy_url, 'https': proxy_url})
+                                proxy['http'] = f"http://{proxy['username']}:{proxy['password']}@{proxy['proxy_address']}:{proxy['port']}"
+                                formatted_proxies.append(proxy)
 
                             if not proxies_data.get('next'):
                                 break
@@ -101,3 +101,17 @@ class ProxyManager:
 
         Logger.debug("Providing proxy", proxy)
         return proxy
+
+
+if __name__ == '__main__':
+    async def test_proxy_manager():
+        proxy_manager = ProxyManager()
+        await proxy_manager.initialize()
+
+        for _ in range(10):
+            proxy = await proxy_manager.get_proxy()
+            Logger.info("Using proxy", proxy)
+
+    import asyncio
+
+    asyncio.run(test_proxy_manager())

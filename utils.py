@@ -6,6 +6,8 @@ import json
 
 from datetime import datetime
 from typing import Tuple
+
+from DatabaseManager import DatabaseManager
 from Logger import Logger
 from bs4 import BeautifulSoup
 from models import ProductData, ProductOptions
@@ -34,6 +36,7 @@ headers = {
     'upgrade-insecure-requests': '1',
     'user-agent': random.choice(WINDOWS_USER_AGENTS),
 }
+db = DatabaseManager()
 
 
 def get_current_time():
@@ -159,6 +162,7 @@ async def fetch_product_data(url: str, max_retries=5) -> Tuple[discord.Embed, Pr
                 options=options_data,
                 product_url=url
             )
+            db.add_or_update_proxy(random_proxy)
             Logger.info(f'Successfully fetched product data from {url}', product_data.to_dict())
             return get_product_embed(product_data), product_data
         except Exception as e:
