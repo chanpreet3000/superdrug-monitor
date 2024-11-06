@@ -5,7 +5,7 @@ import aiohttp
 import json
 
 from datetime import datetime
-from typing import Tuple
+from typing import Tuple, Dict, List
 
 from DatabaseManager import DatabaseManager
 from Logger import Logger
@@ -78,6 +78,53 @@ def get_product_embed(product_data: ProductData) -> discord.Embed:
     return embed
 
 
+def get_single_variant_product(details: Dict) -> List[ProductOptions]:
+    variant_ean = details['ean']
+    product_name = details['name']
+
+    options = details['baseOptions'][0]['options']
+    selected = details['baseOptions'][0]['selected']
+
+    default_stock_level = selected['stock']['stockLevel']
+    default_stock_status = selected['stock']['stockLevelStatus']
+
+    default_formatted_price = selected['priceData']['formattedValue']
+
+    # Process each option to extract variant information
+    options_data = []
+    for option in options:
+        try:
+            variant_name = f"{product_name} - {option['variantOptionQualifiers'][0]['value']}"
+        except (KeyError, IndexError):
+            variant_name = product_name
+
+        try:
+            stock_level = option['stock']['stockLevel']
+            stock_status = option['stock']['stockLevelStatus']
+        except KeyError:
+            stock_level = default_stock_level
+            stock_status = default_stock_status
+
+        try:
+            formatted_price = option['priceData']['formattedValue']
+        except KeyError:
+            formatted_price = default_formatted_price
+
+        options_data.append(
+            ProductOptions(
+                name=variant_name,
+                stock_level=stock_level,
+                is_in_stock=stock_status != 'outOfStock',
+                stock_status=stock_status,
+                product_code=option['code'],
+                formatted_price=formatted_price,
+                product_url=f"https://www.superdrug.com{option['url']}",
+                ean=variant_ean
+            )
+        )
+    return options_data
+
+
 async def fetch_product_data(url: str, max_retries=5) -> Tuple[discord.Embed, ProductData | None]:
     if not url.startswith('https://www.superdrug.com/'):
         raise ValueError(
@@ -127,34 +174,37 @@ async def fetch_product_data(url: str, max_retries=5) -> Tuple[discord.Embed, Pr
 
             options = details['variantMatrix']
 
-            # Process each option to extract variant information
             options_data = []
-            for option in options:
-                try:
-                    variant_name = f"{product_name} - {option['variantValueCategory']['name']}"
-                except (KeyError, IndexError):
-                    variant_name = product_name
+            if len(options) == 0:
+                options_data = get_single_variant_product(details)
+            else:
+                # Process each option to extract variant information
+                for option in options:
+                    try:
+                        variant_name = f"{product_name} - {option['variantValueCategory']['name']}"
+                    except (KeyError, IndexError):
+                        variant_name = product_name
 
-                variant_option = option['variantOption']
-                variant_stock_level = variant_option['stock']['stockLevel']
-                variant_stock_status = variant_option['stock']['stockLevelStatus']
-                variant_ean = variant_option['ean']
-                variant_code = variant_option['code']
-                variant_formatted_price = variant_option['priceData']['formattedValue']
-                variant_url = f"https://www.superdrug.com/{variant_option['url']}"
+                    variant_option = option['variantOption']
+                    variant_stock_level = variant_option['stock']['stockLevel']
+                    variant_stock_status = variant_option['stock']['stockLevelStatus']
+                    variant_ean = variant_option['ean']
+                    variant_code = variant_option['code']
+                    variant_formatted_price = variant_option['priceData']['formattedValue']
+                    variant_url = f"https://www.superdrug.com/{variant_option['url']}"
 
-                options_data.append(
-                    ProductOptions(
-                        name=variant_name,
-                        stock_level=variant_stock_level,
-                        is_in_stock=variant_stock_status != 'outOfStock',
-                        stock_status=variant_stock_status,
-                        product_code=variant_code,
-                        formatted_price=variant_formatted_price,
-                        product_url=variant_url,
-                        ean=variant_ean
+                    options_data.append(
+                        ProductOptions(
+                            name=variant_name,
+                            stock_level=variant_stock_level,
+                            is_in_stock=variant_stock_status != 'outOfStock',
+                            stock_status=variant_stock_status,
+                            product_code=variant_code,
+                            formatted_price=variant_formatted_price,
+                            product_url=variant_url,
+                            ean=variant_ean
+                        )
                     )
-                )
 
             product_data = ProductData(
                 name=product_name,
